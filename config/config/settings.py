@@ -116,6 +116,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = '/staticfiles/'
+STATICFILES_DIRS = [
+    BASE_DIR / 'ai_assistant' / 'ai_assistant' / 'staticfiles',
+]
 
 
 # Email
