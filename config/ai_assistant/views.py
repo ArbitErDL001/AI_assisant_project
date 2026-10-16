@@ -137,7 +137,8 @@ def service_worker(request):
     file_path = (
         settings.BASE_DIR
         / "ai_assistant"
-        / "static"
+        / "ai_assistant"
+        / "staticfiles"
         / "js"
         / "service-worker.js"
     )

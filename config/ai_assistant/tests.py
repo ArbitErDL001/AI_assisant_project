@@ -45,3 +45,10 @@ class AssistantFlowTests(TestCase):
             response,
             'data-service-worker-url="/ai_assistant/service-worker.js"',
         )
+
+    def test_service_worker_is_served_from_existing_staticfiles_folder(self):
+        response = self.client.get("/ai_assistant/service-worker.js")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "application/javascript")
+        self.assertContains(response, "self.skipWaiting()")

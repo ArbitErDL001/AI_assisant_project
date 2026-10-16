@@ -103,4 +103,12 @@ if (form) {
     window.addEventListener("online", updateConnectionStatus);
     window.addEventListener("offline", updateConnectionStatus);
     updateConnectionStatus();
+
+    if ("serviceWorker" in navigator && form.dataset.serviceWorkerUrl) {
+        navigator.serviceWorker
+            .register(form.dataset.serviceWorkerUrl)
+            .catch((error) => {
+                console.error("Service worker registration failed:", error);
+            });
+    }
 }
