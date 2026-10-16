@@ -1,0 +1,104 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#111827">
+    <meta name="description" content="Your AI class assistant for learning.">
+    <title>Class Assistant</title>
+    <link rel="manifest" href="{% static 'json/manifest.json' %}">
+    <link rel="icon" href="{% static 'img/icon.svg' %}" type="image/svg+xml">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>
+<body>
+    <main class="page-shell">
+        <section class="chat-container">
+            <header class="chat-header">
+                <div>
+                    <p class="eyebrow">CLASS ASSISTANT · LESSON HELPER</p>
+                    <h1>AI Assistant</h1>
+                    <p class="subtitle">
+                        A little help for {{ assistant_name }} ·
+                        {{ personality_name }} style
+                    </p>
+                </div>
+
+                <span id="connection-status"
+                      class="connection-status is-online"
+                      role="status">
+                    Online
+                </span>
+            </header>
+
+            <div id="offline-notice" class="offline-notice"
+                 role="status" hidden>
+                You are offline. The app shell may still open, but Gemini
+                needs an internet connection.
+            </div>
+
+            <section id="chat-box" class="chat-box"
+                     aria-label="Conversation" aria-live="polite">
+                <div class="message ai-message">
+                    <span class="message-label">CLASS ASSISTANT</span>
+                    <p class="message-content">
+                        Ready to explore today's science prompt?
+                    </p>
+                    <p class="message-content">
+                        Ask me about photosynthesis, cells, or plant life
+                        cycles and I'll help you learn.
+                    </p>
+                </div>
+            </section>
+
+            <div class="suggestions" aria-label="Suggested questions">
+                <button type="button" class="suggestion">
+                    Explain photosynthesis
+                </button>
+                <button type="button" class="suggestion">
+                    Why are leaves green?
+                </button>
+                <button type="button" class="suggestion">
+                    Give me an example
+                </button>
+            </div>
+
+            <form id="chat-form"
+                  data-ask-url="{% url 'ask_gemini' %}"
+                  data-service-worker-url="{% url 'service_worker' %}">
+                {% csrf_token %}
+
+                <label for="message-input">Ask a question for class</label>
+                <textarea
+                    id="message-input"
+                    class="message-input"
+                    rows="3"
+                    maxlength="4000"
+                    placeholder="What would you like to learn today?"
+                    required
+                ></textarea>
+
+                <div class="form-actions">
+                    <button type="button" id="clear-button"
+                            class="button button-secondary">
+                        Clear
+                    </button>
+                    <button type="submit" id="send-button"
+                            class="button button-primary">
+                        Send
+                    </button>
+                </div>
+            </form>
+
+            <p class="app-footer">
+                Safe Student Mode ·
+                <a href="{% url 'personality_login' %}">
+                    Change name or personality
+                </a>
+            </p>
+        </section>
+    </main>
+
+    <script src="{% static 'js/app.js' %}"></script>
+</body>
+</html>
