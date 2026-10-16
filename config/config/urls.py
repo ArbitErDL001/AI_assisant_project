@@ -1,11 +1,11 @@
 from django.contrib import admin
 from django.urls import path, include
-from django.views.generic.base import RedirectView\
+from django.views.generic.base import RedirectView
 
 urlpatterns = [
     path(
         '', RedirectView.as_view(
-            pattern_name='personilty_login', permanent=False,
+            pattern_name='personality_login', permanent=False,
         ),
         name='root',
     ),

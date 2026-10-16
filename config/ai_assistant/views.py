@@ -84,7 +84,7 @@ def personality_login(request):
         if not name or len(name) > 24 or personality not in PERSONALITIES:
             return render(
                 request,
-                "login/login.html",
+                "html/login.html",
                 {
                     "personalities": PERSONALITIES.items(),
                     "selected_personality": personality,
@@ -104,11 +104,11 @@ def personality_login(request):
 
     return render(
         request,
-        "login/login.html",
+        "html/login.html",
         {
             "personalities": PERSONALITIES.items(),
             "selected_personality": request.session.get(
-                "assistant_personality", "deredere"
+                "assistant_personality", "teasing_supporter"
             ),
             "name": request.session.get("assistant_name", ""),
         },
@@ -123,7 +123,7 @@ def index(request):
 
     return render(
         request,
-        "ai_assistant/home.html",
+        "html/index.html",
         {
             "assistant_name": request.session.get(
                 "assistant_name", "Student"
