@@ -1,0 +1,10 @@
+{
+    "name": "Class Assistant",
+    "short_name": "Assistant",
+    "description": "A student-safe AI study helper.",
+    "start_url": "/ai_assistant/",
+    "scope": "/ai_assistant/",
+    "display": "standalone",
+    "background_color": "#eef2ff",
+    "theme_color": "#111827"
+}
