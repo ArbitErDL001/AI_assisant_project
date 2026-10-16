@@ -3,37 +3,38 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#111827">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="theme-color" content="#090b12">
     <meta name="description" content="Choose your AI study assistant's personality.">
-    <title>Meet Your Class Assistant</title>
+    <title>Meet ΛΞ Assistant</title>
     <link rel="manifest" href="{% static 'json/manifest.json' %}">
-    <link rel="icon" href="{% static 'img/icon.svg' %}" type="image/svg+xml">
+    <link rel="icon" href="{% static 'img/ailogo.svg' %}" type="image/svg+xml">
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
 </head>
-<body>
-    <main class="page-shell">
-        <section class="chat-container welcome-container">
-            <header class="welcome-header">
-                <p class="eyebrow">CLASS ASSISTANT · LESSON HELPER</p>
-                <h1>Let's make learning yours.</h1>
-                <p class="subtitle">
-                    Pick a name and a friendly style for your AI study helper.
-                </p>
+<body class="login-page">
+    <main class="login-shell">
+        <a class="brand login-brand" href="{% url 'personality_login' %}">
+            <span class="brand-icon" aria-hidden="true">✦</span>
+            <span>ΛΞ Assistant</span>
+        </a>
+
+        <section class="login-card" aria-labelledby="login-title">
+            <header class="login-header">
+                <p class="login-eyebrow">YOUR LEARNING SPACE</p>
+                <h1 id="login-title">Let's make learning yours.</h1>
+                <p>Pick a name and a friendly style for your AI study helper.</p>
             </header>
 
             {% if error %}
-                <p class="form-error" role="alert">{{ error }}</p>
+                <p class="login-error" role="alert">{{ error }}</p>
             {% endif %}
 
-            <form method="post" class="personality-form">
+            <form method="post" class="login-form">
                 {% csrf_token %}
 
-                <label class="field-label" for="student-name">
-                    What should we call you?
-                </label>
+                <label class="login-label" for="student-name">What should we call you?</label>
                 <input
-                    class="message-input name-input"
+                    class="login-input"
                     id="student-name"
                     name="name"
                     type="text"
@@ -44,14 +45,11 @@
                     required
                 >
 
-                <fieldset class="personality-fieldset">
-                    <legend class="field-label">
-                        Choose your assistant's personality
-                    </legend>
-
-                    <div class="personality-grid">
+                <fieldset class="login-personalities">
+                    <legend class="login-label">Choose your assistant's personality</legend>
+                    <div class="login-personality-grid">
                         {% for key, personality in personalities %}
-                            <label class="personality-option">
+                            <label class="login-option">
                                 <input
                                     type="radio"
                                     name="personality"
@@ -59,29 +57,23 @@
                                     {% if selected_personality == key %}checked{% endif %}
                                     required
                                 >
-                                <span class="personality-card">
-                                    <span class="personality-name">
-                                        {{ personality.name }}
-                                    </span>
-                                    <span class="personality-description">
-                                        {{ personality.description }}
-                                    </span>
+                                <span class="login-option-card">
+                                    <span class="login-option-name">{{ personality.name }}</span>
+                                    <span class="login-option-description">{{ personality.description }}</span>
                                 </span>
                             </label>
                         {% endfor %}
                     </div>
                 </fieldset>
 
-                <button type="submit" class="button button-primary start-button">
+                <button type="submit" class="login-submit">
                     Continue to chat
+                    <span aria-hidden="true">→</span>
                 </button>
             </form>
-
-            <p class="app-footer">
-                Student-safe study helper · Your choice is saved for this
-                browser session
-            </p>
         </section>
+
+        <p class="login-note">A student-safe study helper · Your choice is saved for this browser session</p>
     </main>
 </body>
 </html>

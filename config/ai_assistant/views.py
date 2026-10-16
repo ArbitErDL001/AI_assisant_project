@@ -12,7 +12,7 @@ from httpx import HTTPError\
 
 logger = logging.getLogger(__name__)
 
-load_dotenv(settings.BASE_DIR / '.env')
+load_dotenv(settings.BASE_DIR.parent / ".env")
 
 
 PERSONALITIES = {
@@ -203,7 +203,7 @@ def ask_gemini(request):
     try:
         client = genai.Client(api_key=api_key)
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.8-flash",
             contents=prompt,
             config={
                 "system_instruction": PERSONALITIES[personality]["instruction"],

@@ -10,18 +10,52 @@ if (form) {
     const offlineNotice = document.getElementById("offline-notice");
 
     function addMessage(text, sender) {
-        const message = document.createElement("div");
-        message.className = `message ${sender}-message`;
+        const isUser = sender === "user";
+        const message = document.createElement("article");
+        message.className = `message ${isUser ? "user-message" : "assistant-message"}`;
+        message.setAttribute(
+            "aria-label",
+            isUser ? "Your message" : "ΛΞ Assistant response",
+        );
 
-        const label = document.createElement("span");
-        label.className = "message-label";
-        label.textContent = sender === "user" ? "STUDENT" : "CLASS ASSISTANT";
+        const meta = document.createElement("div");
+        meta.className = `message-meta${isUser ? " user-meta" : ""}`;
 
-        const content = document.createElement("p");
-        content.className = "message-content";
+        if (isUser) {
+            const name = form.dataset.studentName || "You";
+            const initials = document.createElement("span");
+            initials.className = "avatar avatar-small";
+            initials.textContent = name.trim().charAt(0).toUpperCase();
+
+            const label = document.createElement("span");
+            label.textContent = name;
+            meta.append(label, initials);
+        } else {
+            const brand = document.createElement("span");
+            brand.className = "brand-icon";
+            const icon = document.createElementNS(
+                "http://www.w3.org/2000/svg",
+                "svg",
+            );
+            icon.classList.add("icon");
+            const spark = document.createElementNS(
+                "http://www.w3.org/2000/svg",
+                "use",
+            );
+            spark.setAttribute("href", "#i-spark");
+            icon.appendChild(spark);
+            brand.appendChild(icon);
+
+            const label = document.createElement("strong");
+            label.textContent = "ΛΞ Assistant";
+            meta.append(brand, label);
+        }
+
+        const content = document.createElement(isUser ? "div" : "p");
+        content.className = isUser ? "user-bubble" : "response-intro";
         content.textContent = text;
 
-        message.append(label, content);
+        message.append(meta, content);
         chatBox.appendChild(message);
         message.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
@@ -29,9 +63,9 @@ if (form) {
     function updateConnectionStatus() {
         const online = navigator.onLine;
 
-        statusBadge.textContent = online ? "Online" : "Offline";
-        statusBadge.className =
-            `connection-status ${online ? "is-online" : "is-offline"}`;
+        statusBadge.querySelector("[data-status-label]").textContent =
+            online ? "Online" : "Offline";
+        statusBadge.className = `sync-status ${online ? "is-online" : "is-offline"}`;
         offlineNotice.hidden = online;
     }
 
@@ -51,7 +85,7 @@ if (form) {
         addMessage(message, "user");
         input.value = "";
         sendButton.disabled = true;
-        sendButton.textContent = "Thinking...";
+        sendButton.setAttribute("aria-label", "Waiting for response");
 
         try {
             const csrfToken = form.querySelector(
@@ -82,13 +116,13 @@ if (form) {
             );
         } finally {
             sendButton.disabled = false;
-            sendButton.textContent = "Send";
+            sendButton.setAttribute("aria-label", "Send message");
             input.focus();
         }
     });
 
     clearButton.addEventListener("click", () => {
-        chatBox.replaceChildren();
+        chatBox.querySelectorAll(".message").forEach((message) => message.remove());
         addMessage("Chat cleared. What would you like to learn?", "ai");
         input.focus();
     });
