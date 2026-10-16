@@ -1,0 +1,316 @@
+LAMBDA XI ASSISTANT - BUILD AND GEMINI API TUTORIAL
+===================================================
+
+This guide describes how the project is organized, how to run it on Windows,
+and how the Django server connects to Gemini. Commands below are run from the
+repository root unless a step says otherwise.
+
+
+1. WHAT YOU NEED
+----------------
+
+- Python compatible with Django 6.1.
+- PowerShell on Windows (or adapt the activation/run commands for your shell).
+- A Gemini API key from Google AI Studio.
+- Internet access to call Gemini.
+
+The dependency ranges are recorded in req.txt:
+
+- Django: web framework and test client.
+- google-genai: official Google Gen AI Python SDK.
+- httpx: HTTP transport and timeout exceptions.
+- python-dotenv: loads the local .env file.
+
+
+2. CREATE AND ACTIVATE A VIRTUAL ENVIRONMENT
+--------------------------------------------
+
+From the project root:
+
+    python -m venv env
+    .\env\Scripts\Activate.ps1
+    python -m pip install --upgrade pip
+    python -m pip install -r req.txt
+
+If PowerShell prevents script activation, either allow activation for the
+current user according to your computer's policy, or call the environment's
+Python directly:
+
+    .\env\Scripts\python.exe -m pip install -r req.txt
+
+Do not install project packages globally unless you intend to manage them
+outside this project.
+
+
+3. UNDERSTAND THE PROJECT FILES
+-------------------------------
+
+config/manage.py
+    Django command-line entry point.
+
+config/config/settings.py
+    Django settings, installed app, SQLite database, templates, and static
+    asset configuration.
+
+config/config/urls.py
+    Routes the site root to the personality login and mounts the assistant at
+    /ai_assistant/.
+
+config/ai_assistant/urls.py
+    Defines the personality login, chat page, Gemini endpoint, and service
+    worker routes.
+
+config/ai_assistant/views.py
+    Validates the user/session, renders pages, loads the Gemini key, calls
+    Gemini, and returns JSON responses.
+
+config/ai_assistant/ai_assistant/templates/html/
+    Django templates for the login and chat pages.
+
+config/ai_assistant/ai_assistant/staticfiles/
+    Browser CSS, JavaScript, images, and PWA manifest.
+
+config/ai_assistant/tests.py
+    Django tests for pages, validation, static assets, and Gemini fallback.
+
+The chat list is stored in the browser's localStorage. It is not saved in
+SQLite and will not automatically move between browsers or devices.
+
+
+4. CONFIGURE THE GEMINI API KEY
+-------------------------------
+
+4.1 Create or select a Gemini API key in Google AI Studio. Keep the key
+    private.
+
+4.2 Create a file named .env in the repository root, at the same level as
+    req.txt and the config directory. Add this line, replacing the placeholder
+    with your own key:
+
+        GEMINI_API_KEY=your_gemini_api_key
+
+    Do not add quotes unless your key format requires them. Do not include
+    spaces around the equals sign.
+
+4.3 The repository's .gitignore already excludes .env. Keep it excluded.
+    Never put the key in a template, static JavaScript file, screenshot, or
+    committed source file.
+
+4.4 The view loads the root .env with python-dotenv. Django's settings
+    BASE_DIR points to the config directory, so the code loads:
+
+        settings.BASE_DIR.parent / ".env"
+
+    The API key is read from the server process with:
+
+        os.getenv("GEMINI_API_KEY")
+
+    If it is missing, the server responds with a configuration error instead
+    of making an unauthenticated request.
+
+
+5. HOW A CHAT MESSAGE REACHES GEMINI
+------------------------------------
+
+1. The chat page renders a Django form with the URL for the ask endpoint and
+   a CSRF token.
+2. The browser JavaScript intercepts the form submit and sends the user's
+   message as JSON to /ai_assistant/ask/.
+3. Django checks that the JSON is valid, the message is non-empty and within
+   the size limit, and the session has a selected assistant personality.
+4. The Django server creates a google.genai.Client using GEMINI_API_KEY.
+   The key never needs to be sent to the browser.
+5. The selected personality's system instruction is passed to Gemini along
+   with the user question.
+6. The server attempts configured Gemini models in sequence if the upstream
+   API reports a model-unavailable error, overload, rate limit, or timeout.
+   Each request has a bounded timeout and a single SDK attempt so fallback
+   models can be tried promptly.
+7. Django returns a JSON answer to the browser. The browser displays it and
+   saves the conversation locally.
+
+The model list and personality instructions are defined near the top of
+config/ai_assistant/views.py. Gemini model names and service availability can
+change over time. If responses fail, check server logs, API key permissions,
+Google AI Studio quotas, model availability, and internet access. Do not
+assume the API key is invalid solely because Gemini returns a temporary 503
+or 504 error.
+
+
+6. INITIALIZE THE DATABASE AND RUN THE APP
+------------------------------------------
+
+Apply Django migrations:
+
+    python .\config\manage.py migrate
+
+Run the app's tests:
+
+    python .\config\manage.py test ai_assistant
+
+Start the local development server:
+
+    python .\config\manage.py runserver 127.0.0.1:8000
+
+Open this address in a browser:
+
+    http://127.0.0.1:8000/
+
+The root page redirects to the personality selection screen. Select a
+personality and name, then open a new chat. The Gemini API request is made
+from Django, so local development is enough; the app does not need to be
+deployed to use Gemini. The computer does need an internet connection and a
+working API key.
+
+
+7. PWA: INSTALLING AND EXTENDING THE APP
+----------------------------------------
+
+A Progressive Web App (PWA) uses web technologies but can be installed from a
+browser. This project already includes a web app manifest and registers a
+service worker from the chat page.
+
+PWA-related files in this project:
+
+config/ai_assistant/ai_assistant/staticfiles/json/manifest.json
+    App name, short name, start URL, scope, display mode, and theme colors.
+
+config/ai_assistant/ai_assistant/templates/html/index.html
+config/ai_assistant/ai_assistant/templates/html/login.html
+    Both pages link to the manifest.
+
+config/ai_assistant/ai_assistant/staticfiles/js/service-worker.js
+    Service worker entry point. The current version activates immediately and
+    claims open pages, but does not cache pages or assets.
+
+config/ai_assistant/views.py and config/ai_assistant/urls.py
+    Serve the service worker from /ai_assistant/service-worker.js and set its
+    allowed scope to /ai_assistant/.
+
+config/ai_assistant/ai_assistant/staticfiles/js/app.js
+    Registers the service worker when the chat page loads.
+
+To test the current PWA setup:
+
+1. Start the Django server and open the site at http://127.0.0.1:8000/.
+   Localhost is treated as a secure context by modern browsers for PWA
+   development. A deployed site should use HTTPS.
+2. Open browser developer tools and inspect Application (Chrome/Edge) or
+   Storage (Firefox). Check that the manifest loads and, after opening the
+   chat page, the service worker is registered and active.
+3. In Chrome or Edge, use the install icon in the address bar or the browser
+   menu's "Install app" option when it is offered. Browser install rules vary;
+   missing manifest icons can prevent or limit installation prompts.
+4. Launch the installed app and confirm its start page is /ai_assistant/.
+
+For a production-quality install experience:
+
+1. Create square PNG app icons (including 192x192 and 512x512 sizes) and put
+   them under config/ai_assistant/ai_assistant/staticfiles/img/.
+2. Add each icon to the "icons" array in manifest.json, with its correct
+   "src", "sizes", and "type". Add a maskable icon purpose if you provide an
+   icon designed for maskable shapes.
+3. Set manifest theme_color and background_color to colors that match the
+   app. Keep start_url and scope aligned with the deployed URL prefix.
+4. Add a fetch handler to service-worker.js if the app should load cached
+   pages and static assets offline. Choose and test a cache strategy, provide
+   an offline fallback where appropriate, and update/delete old caches during
+   service-worker activation.
+5. Test updates and offline behavior with browser developer tools and on
+   actual target devices. Avoid caching authenticated or sensitive responses,
+   API keys, or Gemini chat API responses.
+
+Important: the current service worker does not cache the app shell. The fish
+mini-game appears when the already-open chat detects the browser has gone
+offline; it does not currently make the site load offline after closing or
+restarting the installed app. Adding service-worker caching is a separate
+implementation step.
+
+
+8. REBUILDING OR EXTENDING THE PROJECT
+--------------------------------------
+
+When recreating the Django scaffold from a clean repository root, create the
+outer config directory first. These commands produce the same project/app
+locations used here:
+
+    New-Item -ItemType Directory -Path config
+    django-admin startproject config .\config
+    Set-Location .\config
+    python .\manage.py startapp ai_assistant
+    Set-Location ..
+
+The templates and static files in this project are organized under
+config/ai_assistant/ai_assistant/. Create those folders and configure
+TEMPLATES["DIRS"] and STATICFILES_DIRS to match settings.py. Add
+"ai_assistant" to INSTALLED_APPS and include its URL configuration under
+/ai_assistant/ in the project URLs. The current project already has these
+files; do not rerun the scaffolding commands over the existing project.
+
+A sensible implementation order for a fresh version is:
+
+1. Add the dependencies to req.txt and install them in a virtual environment.
+2. Configure Django templates, static assets, SQLite, and the app URL include.
+3. Implement a login view that validates a name and personality and saves
+   them in the Django session.
+4. Implement the chat view and template, then add CSS for the responsive UI.
+5. Add the JavaScript form handler. Send only the user prompt to Django and
+   include the CSRF token; never call Gemini with a key from browser code.
+6. Implement a POST-only Django API view that validates JSON, message length,
+   and session state before calling Gemini.
+7. Add a root .env file locally and load GEMINI_API_KEY on the server.
+8. Add API timeout, error handling, and alternate-model fallback.
+9. Add tests for invalid input, missing session/key, successful API responses,
+   API fallback, and static asset existence.
+10. Add optional UI features such as browser-local chat history, a PWA
+    manifest/service worker, and the offline game.
+
+
+9. COMMON PROBLEMS
+------------------
+
+"Gemini API key is not configured."
+    Confirm .env is in the repository root (not inside config/) and contains
+    GEMINI_API_KEY=... . Restart the Django process after changing the file.
+
+"The AI request failed" or an upstream server error.
+    Confirm internet access and that the key is enabled and has quota. Review
+    the Django terminal output for the upstream status. A 503 or 504 may be
+    temporary; the view tries fallback models, but all models can be
+    unavailable at once.
+
+The browser cannot connect to 127.0.0.1:8000.
+    Start the Django development server in a terminal and leave it running.
+    Confirm the URL and port printed by runserver.
+
+Static file or UI changes do not appear.
+    Hard-refresh the page. Check the browser developer tools for failed
+    static-file requests and confirm the path under staticfiles.
+
+Tests are not found.
+    Run the app tests with an explicit label:
+
+        python .\config\manage.py test ai_assistant
+
+
+10. BEFORE DEPLOYING
+--------------------
+
+The checked-in Django settings are for development. Before exposing this app
+to the internet:
+
+- Replace the hard-coded development SECRET_KEY with a secret environment
+  variable and rotate it.
+- Set DEBUG=False.
+- Set ALLOWED_HOSTS to the actual host names.
+- Configure HTTPS, secure session/CSRF cookies, and an appropriate static-file
+  server.
+- Set GEMINI_API_KEY in the hosting provider's secret store/environment.
+- Review Django's deployment checklist and run:
+
+      python .\config\manage.py check --deploy
+
+- Review Gemini usage, quotas, and billing settings.
+
+Never commit .env, API keys, production secrets, or a real user's conversation
+history.
