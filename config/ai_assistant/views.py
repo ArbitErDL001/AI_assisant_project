@@ -8,7 +8,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods, require_POST
 from google import genai
-from httpx import HTTPError\
+from httpx import HTTPError, TimeoutException
 
 logger = logging.getLogger(__name__)
 
@@ -20,60 +20,93 @@ PERSONALITIES = {
         "name": "Teasing Supporter",
         "description": "A little prickly, but secretly cheering you on.",
         "instruction": (
-            "You are a student-safe science tutor with a playful, teasing "
+            "You are a student-safe app development tutor with a playful, teasing "
             "personality. Sound mildly flustered and teasing while being "
             "kind and supportive. Never insult or discourage the student. "
-            "Explain facts accurately and clearly."
+            "Explain concepts accurately and clearly, and provide useful "
+            "code examples when appropriate."
+        ),
+        "welcome": (
+            "Ready to build something useful, {assistant_name}? Pick a coding "
+            "question and I'll help you untangle it—n-not because I'm excited "
+            "or anything."
         ),
     },
     "calm_thinker": {
         "name": "Calm Thinker",
         "description": "Calm, clear, and quietly dependable.",
         "instruction": (
-            "You are a calm, composed, and logical student science tutor. "
-            "Give accurate, organized explanations and useful examples. "
-            "Keep a reassuring, emotionally restrained tone."
+            "You are a calm, composed, and logical app development tutor. "
+            "Give accurate, organized explanations, practical code examples, "
+            "and a reassuring, emotionally restrained tone."
+        ),
+        "welcome": (
+            "What are you building today, {assistant_name}? I can help you "
+            "plan, code, or debug your app, one clear step at a time."
         ),
     },
     "shy_companion": {
         "name": "Shy Companion",
         "description": "Gentle and shy, opening up through helpful explanations.",
         "instruction": (
-            "You are a gentle, shy, and thoughtful student science tutor. "
+            "You are a gentle, shy, and thoughtful app development tutor. "
             "Use a soft, encouraging tone and become more conversational "
-            "as the student continues. Never pressure the student to share "
-            "personal information."
+            "as the student continues. Explain code clearly, and never "
+            "pressure the student to share personal information."
+        ),
+        "welcome": (
+            "Um, hi {assistant_name}... If you're working on an app, I can "
+            "help with the code, design, or any bugs you run into."
         ),
     },
     "cheerful_friend": {
         "name": "Cheerful Friend",
         "description": "Cheerful, warm, and enthusiastic about learning.",
         "instruction": (
-            "You are a cheerful, warm, optimistic student science tutor. "
+            "You are a cheerful, warm, optimistic app development tutor. "
             "Celebrate curiosity and effort, use friendly encouragement, "
-            "and make learning fun. Keep explanations accurate and useful."
+            "and make coding fun. Keep explanations accurate and useful."
+        ),
+        "welcome": (
+            "Let's make something awesome, {assistant_name}! Choose an app "
+            "development question and we'll turn it into a working feature."
         ),
     },
     "goofy_companion": {
         "name": "Goofy Companion",
-        "description": "Silly and playful, while keeping the science right.",
+        "description": "Silly and playful, while keeping the code right.",
         "instruction": (
-            "You are a silly, playful student science tutor who enjoys "
-            "gentle jokes and goofy analogies. Keep educational facts "
+            "You are a silly, playful app development tutor who enjoys "
+            "gentle jokes and goofy analogies. Keep technical details "
             "accurate and immediately clarify any pretend mistake."
+        ),
+        "welcome": (
+            "Ready to turn code into an app, {assistant_name}? Pick a "
+            "question and we'll debug our way to something delightful."
         ),
     },
     "playful_charmer": {
         "name": "Playful Charmer",
         "description": "Playfully charming and complimentary, in a student-safe way.",
         "instruction": (
-            "You are a charming, playful, upbeat student science tutor. "
+            "You are a charming, playful, upbeat app development tutor. "
             "Use wholesome humor and occasional friendly compliments "
             "about curiosity or effort. Never flirt, use seductive language, "
             "make sexual innuendo, or sexualize any person. Focus on learning."
         ),
+        "welcome": (
+            "A clever app starts with a curious question, {assistant_name}. "
+            "Choose a coding prompt and let's bring your idea to life!"
+        ),
     },
 }
+
+GEMINI_MODELS = (
+    "gemini-3.8-flash",
+    "gemini-flash-lite-latest",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
+)
 
 @require_http_methods(["GET", "POST"])
 def personality_login(request):
@@ -129,6 +162,11 @@ def index(request):
                 "assistant_name", "Student"
             ),
             "personality_name": PERSONALITIES[personality]["name"],
+            "welcome_message": PERSONALITIES[personality]["welcome"].format(
+                assistant_name=request.session.get(
+                    "assistant_name", "Student"
+                )
+            ),
         },
     )
 
@@ -201,16 +239,88 @@ def ask_gemini(request):
         )
 
     try:
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(
-            model="gemini-3.8-flash",
-            contents=prompt,
-            config={
-                "system_instruction": PERSONALITIES[personality]["instruction"],
-            },
+        client = genai.Client(
+            api_key=api_key,
+            http_options=genai.types.HttpOptions(
+                timeout=15000,
+                retry_options=genai.types.HttpRetryOptions(attempts=1)
+            ),
         )
-    except (genai.errors.APIError, HTTPError):
+        response = None
+        last_model_error = None
+
+        for model in GEMINI_MODELS:
+            try:
+                response = client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config={
+                        "system_instruction": PERSONALITIES[personality][
+                            "instruction"
+                        ],
+                    },
+                )
+                break
+            except (genai.errors.APIError, TimeoutException) as error:
+                status_code = getattr(error, "code", None)
+                if status_code not in (None, 404, 429, 503, 504):
+                    raise
+
+                last_model_error = error
+                logger.warning(
+                    "Gemini model %s returned HTTP %s; trying fallback.",
+                    model,
+                    status_code or "timeout",
+                )
+
+        if response is None:
+            if last_model_error is not None:
+                raise last_model_error
+            return JsonResponse(
+                {"error": "No Gemini models are configured."},
+                status=503,
+            )
+    except (genai.errors.APIError, HTTPError) as error:
         logger.exception("Gemini API request failed")
+        if isinstance(error, genai.errors.APIError) and error.code == 429:
+            return JsonResponse(
+                {
+                    "error": (
+                        "Gemini is rate-limited right now. Please wait a "
+                        "moment and try again."
+                    )
+                },
+                status=429,
+            )
+        if isinstance(error, genai.errors.APIError) and error.code == 503:
+            return JsonResponse(
+                {
+                    "error": (
+                        "Gemini is temporarily busy. Please try again in a "
+                        "moment."
+                    )
+                },
+                status=503,
+            )
+        if isinstance(error, genai.errors.APIError) and error.code == 504:
+            return JsonResponse(
+                {
+                    "error": (
+                        "Gemini is taking too long to respond. Please try "
+                        "again."
+                    )
+                },
+                status=504,
+            )
+        if isinstance(error, TimeoutException):
+            return JsonResponse(
+                {
+                    "error": (
+                        "Gemini took too long to respond. Please try again."
+                    )
+                },
+                status=504,
+            )
         return JsonResponse(
             {
                 "error": (

@@ -9,7 +9,7 @@
     <title>ΛΞ Assistant</title>
     <link rel="manifest" href="{% static 'json/manifest.json' %}">
     <link rel="icon" href="{% static 'img/ailogo.svg' %}" type="image/svg+xml">
-    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}?v=2">
 </head>
 <body>
     <svg class="icon-library" xmlns="http://www.w3.org/2000/svg">
@@ -77,13 +77,17 @@
                 <span>New chat</span>
             </button>
 
-            <nav class="history" aria-label="Current conversation">
-                <h2>This session</h2>
-                <a class="history-item active" href="#conversation" aria-current="page">
+            <nav class="history" aria-label="Chat history">
+                <h2>Your chats</h2>
+                <button class="history-item active" id="current-chat-item" type="button" aria-current="page">
                     <svg class="icon"><use href="#i-chat"/></svg>
-                    <span>Science study chat</span>
-                </a>
-                <div class="history-divider"></div>
+                    <span id="current-chat-title">New chat</span>
+                </button>
+                <div id="recent-chats" aria-label="Your chats"></div>
+                <p class="history-storage-warning" id="history-storage-warning" role="status" hidden>
+                    Chat history could not be saved in this browser.
+                </p>
+                <div class="history-divider" id="history-divider" hidden></div>
                 <a class="history-item" href="{% url 'personality_login' %}">
                     <svg class="icon"><use href="#i-edit"/></svg>
                     <span>Change assistant style</span>
@@ -122,7 +126,7 @@
                 <div class="conversation-title">
                     <svg class="icon mobile-lock"><use href="#i-lock"/></svg>
                     <div>
-                        <h1>Science study chat</h1>
+                        <h1 id="conversation-title">New chat</h1>
                         <p>
                             <svg class="icon"><use href="#i-lock"/></svg>
                             A private learning session · {{ personality_name }} style
@@ -145,7 +149,54 @@
                 You are offline. Sending chat questions requires an internet connection.
             </div>
 
-            <section class="conversation-scroll" id="conversation" aria-label="Science study conversation" tabindex="0">
+            <section
+                class="offline-game"
+                id="offline-game"
+                aria-labelledby="offline-game-title"
+                aria-modal="true"
+                role="dialog"
+                hidden
+            >
+                <div class="offline-game-card">
+                    <p class="offline-game-eyebrow">A LITTLE OFFLINE BREAK</p>
+                    <h2 id="offline-game-title" tabindex="-1">You're offline, {{ assistant_name }}.</h2>
+                    <p class="offline-game-intro">
+                        The connection is taking a swim. Feed the fish while we wait for it to return.
+                    </p>
+
+                    <div class="ocean" id="ocean" aria-label="Fish-feeding game. Click or tap the water to drop food.">
+                        <div class="wave wave1" aria-hidden="true"></div>
+                        <div class="wave wave2" aria-hidden="true"></div>
+                        <div class="wave wave3" aria-hidden="true"></div>
+                        <div class="bubbles" aria-hidden="true">
+                            <span class="bubble"></span>
+                            <span class="bubble"></span>
+                            <span class="bubble"></span>
+                            <span class="bubble"></span>
+                            <span class="bubble"></span>
+                        </div>
+                        <span class="fish" aria-hidden="true">🐟</span>
+                        <span class="fish" aria-hidden="true">🐠</span>
+                        <span class="fish" aria-hidden="true">🐡</span>
+                        <span class="fish" aria-hidden="true">🐬</span>
+                        <span class="fish" aria-hidden="true">🐙</span>
+                        <span class="fish" aria-hidden="true">🪼</span>
+                        <span class="fish" aria-hidden="true">🦑</span>
+                        <span class="feeder" id="feeder" aria-hidden="true">🪣</span>
+                    </div>
+
+                    <div class="offline-game-controls">
+                        <p>🍞 Tap or click the water to drop food</p>
+                        <p>Fish fed: <output id="score" aria-live="polite">0</output></p>
+                        <p class="offline-game-hint">Watch the fish swim over for a snack.</p>
+                    </div>
+                    <p class="offline-game-status" id="offline-game-status" role="status">
+                        Waiting for your connection to return…
+                    </p>
+                </div>
+            </section>
+
+            <section class="conversation-scroll" id="conversation" aria-label="App development conversation" tabindex="0">
                 <div class="conversation" id="chat-box" aria-live="polite">
                     <div class="date-divider"><span>Your learning session</span></div>
                     <article class="message assistant-message" aria-label="ΛΞ Assistant introduction">
@@ -156,9 +207,7 @@
                             <strong>ΛΞ Assistant</strong>
                         </div>
                         <p class="response-intro">
-                            Ready to explore today's science prompt, {{ assistant_name }}?
-                            Ask about photosynthesis, cells, or plant life cycles and
-                            we'll work through it together.
+                            {{ welcome_message }}
                         </p>
                     </article>
                 </div>
@@ -167,9 +216,9 @@
             <footer class="composer-area">
                 <div class="composer-inner">
                     <div class="suggestions" aria-label="Suggested questions">
-                        <button class="suggestion" type="button">Explain photosynthesis <span aria-hidden="true">↗</span></button>
-                        <button class="suggestion" type="button">Why are leaves green? <span aria-hidden="true">↗</span></button>
-                        <button class="suggestion desktop-suggestion" type="button">Give me an example <span aria-hidden="true">↗</span></button>
+                        <button class="suggestion" type="button" data-prompt="How do I create a Django view and URL?">How do I create a Django view and URL? <span aria-hidden="true">↗</span></button>
+                        <button class="suggestion" type="button" data-prompt="How do I connect a frontend form to an API?">How do I connect a frontend form to an API? <span aria-hidden="true">↗</span></button>
+                        <button class="suggestion desktop-suggestion" type="button" data-prompt="Help me debug a Python error">Help me debug a Python error <span aria-hidden="true">↗</span></button>
                     </div>
 
                     <form
@@ -185,7 +234,7 @@
                             id="message-input"
                             rows="2"
                             maxlength="4000"
-                            placeholder="Ask a question about science..."
+                            placeholder="Ask a question about app development..."
                             required
                         ></textarea>
 
@@ -205,6 +254,7 @@
         </main>
     </div>
 
-    <script src="{% static 'js/app.js' %}"></script>
+    <script src="{% static 'js/app.js' %}?v=3"></script>
+    <script src="{% static 'js/offline-game.js' %}"></script>
 </body>
 </html>

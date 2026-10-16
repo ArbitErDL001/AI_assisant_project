@@ -1,10 +1,12 @@
 import json
 import os
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.staticfiles import finders
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from google import genai
 
 
 class AssistantViewsTests(TestCase):
@@ -37,6 +39,32 @@ class AssistantViewsTests(TestCase):
         self.assertContains(response, 'class="sidebar"')
         self.assertContains(response, 'class="conversation-scroll"')
         self.assertContains(response, 'class="composer"')
+        self.assertContains(response, 'id="recent-chats"')
+        self.assertContains(response, 'aria-label="Your chats"')
+        self.assertNotContains(response, "Recent chats")
+        self.assertContains(response, 'id="current-chat-item"')
+        self.assertContains(response, 'id="offline-game"')
+        self.assertContains(response, "js/offline-game.js")
+        self.assertContains(
+            response,
+            "Ready to build something useful, Alex?",
+        )
+        self.assertContains(response, "How do I create a Django view and URL?")
+        self.assertContains(response, "Help me debug a Python error")
+        self.assertNotContains(response, "photosynthesis")
+
+    def test_welcome_message_matches_selected_personality(self):
+        self.client.post(
+            reverse("personality_login"),
+            {"name": "Sam", "personality": "calm_thinker"},
+        )
+
+        response = self.client.get(reverse("index"))
+
+        self.assertContains(
+            response,
+            "What are you building today, Sam?",
+        )
 
     def test_login_accepts_valid_selection(self):
         response = self.client.post(
@@ -106,14 +134,110 @@ class AssistantViewsTests(TestCase):
             ],
             "gemini-3.8-flash",
         )
+        self.assertEqual(
+            mock_client.call_args.kwargs["http_options"]
+            .retry_options.attempts,
+            1,
+        )
+        self.assertEqual(
+            mock_client.call_args.kwargs["http_options"].timeout,
+            15000,
+        )
+
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"})
+    @patch("ai_assistant.views.genai.Client")
+    def test_chat_falls_back_when_gemini_model_is_busy(self, mock_client):
+        generate_content = mock_client.return_value.models.generate_content
+        generate_content.side_effect = [
+            genai.errors.ServerError(
+                503, {"error": {"message": "busy"}}
+            ),
+            SimpleNamespace(
+                text="Leaves reflect green light."
+            ),
+        ]
+
+        response = self.client.post(
+            reverse("ask_gemini"),
+            data=json.dumps({"message": "Why are leaves green?"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"answer": "Leaves reflect green light."})
+        self.assertEqual(
+            [
+                call.kwargs["model"]
+                for call in generate_content.call_args_list
+            ],
+            ["gemini-3.8-flash", "gemini-flash-lite-latest"],
+        )
+
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"})
+    @patch("ai_assistant.views.genai.Client")
+    def test_chat_falls_back_after_gemini_deadline(self, mock_client):
+        generate_content = mock_client.return_value.models.generate_content
+        generate_content.side_effect = [
+            genai.errors.ServerError(
+                504, {"error": {"message": "deadline exceeded"}}
+            ),
+            SimpleNamespace(text="Chlorophyll reflects green light."),
+        ]
+
+        response = self.client.post(
+            reverse("ask_gemini"),
+            data=json.dumps({"message": "Why are leaves green?"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json(),
+            {"answer": "Chlorophyll reflects green light."},
+        )
+        self.assertEqual(
+            [
+                call.kwargs["model"]
+                for call in generate_content.call_args_list
+            ],
+            ["gemini-3.8-flash", "gemini-flash-lite-latest"],
+        )
+
+    @patch.dict(os.environ, {"GEMINI_API_KEY": "test-key"})
+    @patch("ai_assistant.views.genai.Client")
+    def test_chat_reports_when_all_gemini_models_are_busy(self, mock_client):
+        generate_content = mock_client.return_value.models.generate_content
+        generate_content.side_effect = genai.errors.ServerError(
+            503, {"error": {"message": "busy"}}
+        )
+
+        response = self.client.post(
+            reverse("ask_gemini"),
+            data=json.dumps({"message": "Why are leaves green?"}),
+            content_type="application/json",
+        )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(
+            response.json(),
+            {
+                "error": (
+                    "Gemini is temporarily busy. Please try again in a "
+                    "moment."
+                )
+            },
+        )
+        self.assertEqual(generate_content.call_count, 4)
 
     def test_pwa_files_exist(self):
         for asset in (
             "css/styles.css",
             "js/app.js",
+            "js/offline-game.js",
             "js/service-worker.js",
             "json/manifest.json",
             "img/ailogo.svg",
+            "img/background.jpg",
         ):
             with self.subTest(asset=asset):
                 self.assertIsNotNone(finders.find(asset))
